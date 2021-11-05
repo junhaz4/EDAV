@@ -1,0 +1,208 @@
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+library(ggplot2)
+library(tidyverse)
+library(GGally)
+library(Lock5withR)
+library(grid)
+library(vcd)
+library(ggalluvial)
+library(boot)
+library(stringr)
+library(readr)
+library(dplyr)
+library(parcoords)
+library(tidyr)
+library(d3r)
+library(RColorBrewer)
+```
+### 1. Crime
+
+a) Create a parallel coordinates plot showing the number of crimes in each of the categories listed for 2020. Show actual counts; do not rescale. Your graph should have one line for each county in New York State. (Use `GGally::ggparcoord()`)
+```{r}
+df <- read_csv("https://data.ny.gov/api/views/ca8h-8gjq/rows.csv")
+```
+
+```{r}
+df %>%
+  filter(Year == 2020) %>%
+  group_by(County) %>%
+  select(Murder,
+         Rape,
+         Robbery,
+         `Aggravated Assault`,
+         Burglary,
+         Larceny,
+         `Motor Vehicle Theft`) %>%
+  summarise_each(funs(sum(., na.rm = TRUE))) %>%
+  ggparcoord(columns = 2:8, scale = 'globalminmax') +
+  geom_vline(xintercept = 1:7, color = 'lightblue') +
+  labs(title = 'parallel coordinate plot of the number of crimes for each category', x =
+         'categories', y = 'values')
+```
+
+b) Now experiment with alpha blending, splines, and rescaling to create the clearest version of the plot that you can. What patterns do you observe? (Use `GGally::ggparcoord()`)
+```{r}
+df %>%
+  filter(Year == 2020) %>%
+  select(
+    County,
+    Murder,
+    Rape,
+    Robbery,
+    `Aggravated Assault`,
+    Burglary,
+    Larceny,
+    `Motor Vehicle Theft`
+  ) %>%
+  group_by(County) %>%
+  summarise_each(funs(sum(., na.rm = TRUE))) %>%
+  ggparcoord(
+    columns = 2:8,
+    alphaLines = .5,
+    scale = "globalminmax",
+    splineFactor = 10
+  ) +
+  geom_vline(xintercept = 1:7, color = 'lightblue') +
+  labs(title = 'Parallel coordinate plot of the number of crimes for each category', x =
+         'categories', y = 'values') +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+<br/>
+<b>Short Answer:</b> Each line represents the crime of one county.\
+1. According to the graph, Larceny and Aggravated Assault are two categories that have the highest values among all counties and Murder and Rape are the lowest.As we can see from the graph, the closer the line is to the value 0, the darker the line is. Most counties has darker lines around 0 except the Rape.\
+2. According to the graph, it seems that if one county has highest cases in one category, then it's really like that this county will also have the highest cases in other categories.\
+3. There is a positive relationship between Motor Vehicle Theft and Larceny, which means that counties with more Motor Vehicle Theft cases will have more Larceny cases, since most lines between Motor Vehicle Theft and Larceny are not crossing each other and both have negative slope. Similarly, there is also a positive relationship between Larceny and Burglary using the same reason above.
+<br/>
+c) Create an interactive parallel coordinates plot of the same data, coloring by `Region`. Discuss outliers, clusters, and correlations in detail.
+```{r}
+df %>%
+  filter(Year == 2020) %>%
+  select(
+    Region,
+    County,
+    Murder,
+    Rape,
+    Robbery,
+    `Aggravated Assault`,
+    Burglary,
+    Larceny,
+    `Motor Vehicle Theft`
+  ) %>%
+  group_by(County, Region) %>%
+  summarise_each(funs(sum(., na.rm = TRUE))) %>%
+  parcoords(
+    rownames = F,
+    brushMode = '1D-axes',
+    reorderable = T,
+    queue = T,
+    withD3 = T,
+    color = list(
+      colorBy = 'Region',
+      colorScale = 'scaleOrdinal',
+      colorScheme = 'schemeCategory10'
+    )
+  )
+```
+<br/>
+<b>Short Answer:</b> \
+1. From the graph, yellow line represents counties in NYC and blue line represents counties in Non-NYC. It's clear that in general counties in NYC have the highest crime cases than counties in Non-NYC except Richmond county which has really low crime cases among all counties in NYC.\
+2. Besides, Kings county in NYC has the highest crimes cases in Murder, Rape, Robbery and Aggravated Assault among all counties and high crime cases in other categories, which makes Kind county the most unsafe place in NYC. Also, new york county has the highest number of Larceny cases.\
+3. Regrading Non-NYC regions, Essex seems to be the most unsafe place because it has the highest crime cases especially its highest crime cases in Burglary and Motor vehicle Theft and Hamilton and Schuler have no crime cases and seem to be the safest places.\
+4. From the graph, counties in NYC has high crime cases in Murder, Rape and Robbery and has relatively low crime cases in Assault, Burglary and motor vehicle theft. For counties in Non-NYC, most counties has high crime cases in Rape, Burglary and Larceny. Most lines between Rape and Robbery have negative slop and not crossing each other, this means a postive relationship. Also, there's a positive relationship between Murder and Rape for the same reasoning.
+<br/>
+
+### 2. Sleep
+a) Is there an association between `ClassYear` and `AnxietyStatus`? Between `ClassYear` and `NumEarlyClass`? Justify your answers with mosaic plots.
+```{r fig.width=8}
+vcd::mosaic(
+  SleepStudy$AnxietyStatus ~ SleepStudy$ClassYear,
+  direction = c("v", "h"),
+  highlighting_fill = brewer.pal(3, "Blues"),
+  main = 'Mosaic plot between class year and anxiety status'
+)
+vcd::mosaic(
+  SleepStudy$NumEarlyClass ~ SleepStudy$ClassYear,
+  direction = c("v", "h"),
+  highlighting_fill = brewer.pal(6, "Blues"),
+  main = 'Mosaic plot between class year and number of early class'
+)
+```
+
+<br/>
+<b>Short Answer:</b> From the plot, there is no clear association between class year and anxiety status. There seems to be a negative association between class year and number of early class. As class year increases, the number of early classes decreases. For example, as class year gets bigger, the area of 5 early class gets smaller and the area of 0 early class gets bigger.
+<br/>
+b) Perform chi square tests to test for associations between the sets of variables graphed in part a). What are the results? Discuss in relation to the mosaic plots.
+```{r}
+ct1 <- table(SleepStudy[, c("ClassYear", "AnxietyStatus")])
+chisq.test(ct1, correct = FALSE)
+ct2 <- table(SleepStudy[, c("ClassYear", "NumEarlyClass")])
+chisq.test(ct2, correct = FALSE)
+```
+<br/>
+<b>Short Answer: </b> \
+1. We perform the Chi-square test on anxiety status and class year.\
+<b> Null hypothesis: </b> there is no association between anxiety status and class year.\
+<b> Alternative hypothesis: </b> anxiety status and class year are not independent.\
+The p-value is 0.5938 greater than the alpha value 0.05, so we fail to reject the null hypothesis that there is no association between class year and anxiety status.
+
+2.We perform the Chi-square test on number of early class and class year.\
+<b> Null hypothesis: </b> there is no association between number of early class and class year.\
+<b> Alternative hypothesis: </b> number of early class and class year are not independent.\
+The p-value is less than than the alpha value 0.05, so we reject the null hypothesis and conclude that there is association between number of early class and class year.
+<br/>
+
+c) How is the relationship between anxiety status and number of early classes affected by class year? Create a mosaic plot showing all three variables, treating anxiety status as the dependent variable. Discuss the results. 
+```{r, fig.width=10}
+vcd::mosaic(
+  SleepStudy$AnxietyStatus ~ SleepStudy$ClassYear+SleepStudy$NumEarlyClass,
+  direction = c("v", "v", "h"),
+  highlighting_fill = brewer.pal(3, "Blues"),
+  main = 'mosaic plot among anxiety status, class year and number of early class'
+)
+```
+<br/>
+<b>Short Answer:</b> After looking at the above mosaic plot, we can conclude the following results:<br/>
+1. From the plot, we can tell that there is association between anxiety status and number of early classes affected by class year. If we fix class year, then the anxiety status becomes severe as the number of early classes gets smaller. As class year increases, are of small number of early classes (eg 0,1,2) gets bigger and the area of the anxiety status at those sections also gets bigger.<br/>
+2. The majority percentage of Anxiety status seems to be of 'Normal' status over the different class years.<br/>
+3. The anxiety status shifted over from 'Severe' to 'Normal' with change in 'NumEarlyClass' from 2 to 3.
+<br/> <br/>
+d) Use the base `pairs()` function to draw a mosaic pairs plot of all all categorical (factor) variables in `SleepStudy`. Based on the plot, list all pairs of variables from strongest association to weakest association. (Note: The **vcd** package must be loaded for `pairs()` to find the correct method.) Name a pair of variables which appear to have a very strong association. Name a pair of variables which appear not to be associated.
+```{r,fig.width=13, fig.height=13}
+pairs(table(SleepStudy[sapply(SleepStudy, is.factor)]),
+      highlighting = 2,
+      main = "Mosaic Pair plots of all categorical variables in 'SleepStudy'")
+```
+
+<br/>
+Short Answer: A pari of variables seems to be strongly associated is Stress and Depression Status.And Early Class and Sex appear not to be associated.
+<br/>
+
+### 3. Wait List
+There are 640 rows and 4 variables:
+`Name` name of student (actual names were replaced with names generated from the **randomNames** package)
+`Date` since SSOL updates overnight, waitlist positions were collected each morning during the change of program period
+`Priority` position in waitlist, for example `1` = top position on list
+`Status` final outcome, *Registered* = received a place in class and remained; *Dropped Class* = received a place in class and left; *Left List* = left waiting list; *Joined* = remained on waiting list at the end of the change of program period. (Note that the status reflects what ultimately happened, not what the status was on a particular date.)
+
+Create an alluvial diagram that shows waitlist movement during the change of program period. It is not necessary to include the `Name` column in the diagram, but it should be possible to observe movement of individual students: for example, that the student who was 22nd in the waitlist on Sept 9th moved up to 15th place on Sept 16th and then left the list.
+```{r 3, fig.width=10}
+# The below `filepath` should point to the file location of 'stats_wl.csv' file
+file_path ='stats_wl.csv'
+wl = read_csv(file_path)
+wl %>%
+  mutate(Priority = formatC(Priority, flag = 0, width = 2)) %>%
+  arrange(Date, Priority) %>%
+  ggplot(aes(
+    alluvium = Name,
+    x = Date,
+    stratum = Priority
+  )) +
+  geom_alluvium(aes(fill = Status)) +
+  geom_stratum() +
+  geom_text(stat = "stratum", aes(label = after_stat(stratum)), size = 3) +
+  scale_x_date(date_labels = "%b %d", date_breaks  = "1 day") +
+  ylab('Priority') +
+  ggtitle("Alluvial diagram reflecting waitist movement during the change of program period") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
